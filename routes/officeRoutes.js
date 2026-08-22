@@ -4,6 +4,7 @@ const { protect } = require('../middleware/authMiddleware');
 const authorize = require('../middleware/roleMiddleware');
 const { requireActiveGrant } = require('../middleware/accessGrantMiddleware');
 const uploadLogo = require('../middleware/logoUploadMiddleware');
+const validateFileContent = require('../middleware/fileContentValidator');
 const {
   createOffice,
   getOffices,
@@ -28,5 +29,6 @@ router.get('/:officeId/clients', protect, authorize('super_admin'), requireActiv
 router.put('/:id', protect, authorize('super_admin'), updateOffice);
 router.put('/:id/suspend', protect, authorize('super_admin'), suspendOffice);
 router.put('/:id/activate', protect, authorize('super_admin'), activateOffice);
+router.post('/me/logo', protect, authorize('office_admin'), uploadLogo.single('logo'), validateFileContent, uploadOfficeLogo);
 
 module.exports = router;
