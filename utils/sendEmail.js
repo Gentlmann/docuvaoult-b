@@ -3,7 +3,7 @@ const { Resend } = require('resend');
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 const sendPasswordResetEmail = async (toEmail, resetLink) => {
-  const { data, error } = await resend.emails.send({
+  await resend.emails.send({
     from: 'DocuVault <onboarding@resend.dev>',
     to: toEmail,
     subject: 'Reset your DocuVault password',
@@ -19,16 +19,6 @@ const sendPasswordResetEmail = async (toEmail, resetLink) => {
       </div>
     `,
   });
-
-  if (error) {
-    // Ku daabac error-ka SAXDA AH server console-ka - kani ayaa kuu sheegi doona sababta
-    console.error('--- RESEND FAILED TO SEND EMAIL ---');
-    console.error(error);
-    throw new Error(`Failed to send reset email: ${error.message || JSON.stringify(error)}`);
-  }
-
-  console.log('Email sent successfully. Resend id:', data?.id);
-  return data;
 };
 
 module.exports = { sendPasswordResetEmail };
