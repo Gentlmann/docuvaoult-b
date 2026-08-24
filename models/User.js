@@ -12,6 +12,8 @@ const userSchema = new mongoose.Schema({
     cases: { type: String, enum: ['none', 'read', 'write'], default: 'write' },
     documents: { type: String, enum: ['none', 'read', 'write'], default: 'write' },
   },
+  resetPasswordToken: { type: String, default: null },
+  resetPasswordExpires: { type: Date, default: null },
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);

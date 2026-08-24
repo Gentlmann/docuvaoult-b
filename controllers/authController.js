@@ -1,9 +1,10 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const User = require('../models/User');
 const generateToken = require('../utils/generateToken');
 const { logAction } = require('../services/auditService');
+const { sendPasswordResetEmail } = require('../utils/sendEmail');
 
-// Register - used to create Super Admin manually, or Office Admin creates Staff
 const registerUser = async (req, res) => {
   try {
     const { name, email, password, role, officeId } = req.body;
@@ -35,7 +36,6 @@ const registerUser = async (req, res) => {
   }
 };
 
-// Login
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -84,4 +84,57 @@ const loginUser = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, loginUser };
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.json({ message: 'If that email exists, a reset link has been sent.' });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    user.resetPasswordToken = hashedToken;
+    user.resetPasswordExpires = Date.now() + 30 * 60 * 1000;
+    await user.save();
+
+    const resetLink = `${process.env.CLIENT_URL}/reset-password/${rawToken}`;
+    await sendPasswordResetEmail(user.email, resetLink);
+
+    res.json({ message: 'If that email exists, a reset link has been sent.' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired reset link' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+    await user.save();
+
+    res.json({ message: 'Password reset successfully. You can now log in.' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+module.exports = { registerUser, loginUser, forgotPassword, resetPassword };
