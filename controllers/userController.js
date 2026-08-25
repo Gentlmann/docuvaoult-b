@@ -154,11 +154,64 @@ const createOfficeAdmin = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+const resetStaffPassword = async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+    }
+
+    const staff = await User.findOne({
+      _id: req.params.id,
+      officeId: req.user.officeId,
+      role: 'staff',
+    });
+
+    if (!staff) {
+      return res.status(404).json({ message: 'Staff member not found' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    staff.password = await bcrypt.hash(newPassword, salt);
+    await staff.save();
+
+    res.json({ message: 'Staff password reset successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+const resetOfficeAdminPassword = async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+    }
+
+    const admin = await User.findOne({ _id: req.params.id, role: 'office_admin' });
+
+    if (!admin) {
+      return res.status(404).json({ message: 'Office Admin not found' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    admin.password = await bcrypt.hash(newPassword, salt);
+    await admin.save();
+
+    res.json({ message: 'Office Admin password reset successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
 
 module.exports = {
   createStaff,
   getStaff,
   getStaffById,
+  resetStaffPassword,
+  resetOfficeAdminPassword,
+
   updateStaff,
   deactivateStaff,
   reactivateStaff,
