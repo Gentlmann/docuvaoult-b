@@ -204,7 +204,25 @@ const resetOfficeAdminPassword = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+const deleteStaff = async (req, res) => {
+  try {
+    const staff = await User.findOne({
+      _id: req.params.id,
+      officeId: req.user.officeId,
+      role: 'staff',
+    });
 
+    if (!staff) {
+      return res.status(404).json({ message: 'Staff member not found' });
+    }
+
+    await User.deleteOne({ _id: staff._id });
+
+    res.json({ message: 'Staff member permanently deleted' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
 module.exports = {
   createStaff,
   getStaff,
@@ -216,4 +234,5 @@ module.exports = {
   deactivateStaff,
   reactivateStaff,
   createOfficeAdmin,
+  deleteStaff,
 };

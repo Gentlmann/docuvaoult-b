@@ -10,6 +10,8 @@ const {
   deactivateStaff,
   reactivateStaff,
   createOfficeAdmin,
+  deleteStaff,
+
 } = require('../controllers/userController');
 const { createStaffValidation, validate } = require('../validators/staffValidators');
 
@@ -21,4 +23,7 @@ router.put('/staff/:id', protect, authorize('office_admin'), updateStaff);
 router.put('/staff/:id/deactivate', protect, authorize('office_admin'), deactivateStaff);
 router.put('/staff/:id/reactivate', protect, authorize('office_admin'), reactivateStaff);
 router.post('/staff', protect, authorize('office_admin'), createStaffValidation, validate, createStaff);
+router.delete('/staff/:id', protect, authorize('office_admin'), deleteStaff);
+
+
 module.exports = router;
