@@ -31,4 +31,5 @@ router.put('/:id/suspend', protect, authorize('super_admin'), suspendOffice);
 router.put('/:id/activate', protect, authorize('super_admin'), activateOffice);
 router.post('/me/logo', protect, authorize('office_admin'), uploadLogo.single('logo'), validateFileContent, uploadOfficeLogo);
 
+
 module.exports = router;
