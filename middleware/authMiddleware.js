@@ -24,8 +24,8 @@ const protect = async (req, res, next) => {
 
     if (user.officeId) {
       const office = await Office.findById(user.officeId);
-      if (!office || office.status === 'suspended') {
-        return res.status(401).json({ message: 'Your office access has been suspended' });
+      if (!office || office.status !== 'active') {
+        return res.status(401).json({ message: 'Your office is not active. Please contact support.' });
       }
     }
 

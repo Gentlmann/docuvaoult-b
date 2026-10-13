@@ -1,8 +1,11 @@
+const fs = require('fs');
+const path = require('path');
 const Office = require('../models/Office');
 const Client = require('../models/Client');
+const User = require('../models/User');
 const { getDefaultQuotaForPlan } = require('../utils/planQuotas');
+const { logAction } = require('../services/auditService');
 
-// Super Admin creates a new office
 const createOffice = async (req, res) => {
   try {
     const { name, officeType, subscriptionPlan, storageQuotaMB } = req.body;
@@ -22,7 +25,6 @@ const createOffice = async (req, res) => {
   }
 };
 
-// Super Admin views all offices
 const getOffices = async (req, res) => {
   try {
     const offices = await Office.find();
@@ -32,7 +34,6 @@ const getOffices = async (req, res) => {
   }
 };
 
-// Super Admin views clients in a SPECIFIC office — ONLY with an active grant
 const getOfficeClients = async (req, res) => {
   try {
     const { officeId } = req.params;
@@ -43,7 +44,6 @@ const getOfficeClients = async (req, res) => {
   }
 };
 
-// Update office details
 const updateOffice = async (req, res) => {
   try {
     const { name, officeType, subscriptionPlan, storageQuotaMB } = req.body;
@@ -57,10 +57,8 @@ const updateOffice = async (req, res) => {
     office.subscriptionPlan = subscriptionPlan ?? office.subscriptionPlan;
 
     if (storageQuotaMB) {
-      // Explicit value from the form always wins
       office.storageQuotaMB = storageQuotaMB;
     } else if (planChanged) {
-      // No explicit quota given, but plan changed — apply new plan's default
       office.storageQuotaMB = getDefaultQuotaForPlan(subscriptionPlan);
     }
 
@@ -71,7 +69,6 @@ const updateOffice = async (req, res) => {
   }
 };
 
-// Suspend an office
 const suspendOffice = async (req, res) => {
   try {
     const office = await Office.findById(req.params.id);
@@ -84,7 +81,6 @@ const suspendOffice = async (req, res) => {
   }
 };
 
-// Reactivate a suspended office
 const activateOffice = async (req, res) => {
   try {
     const office = await Office.findById(req.params.id);
@@ -97,7 +93,71 @@ const activateOffice = async (req, res) => {
   }
 };
 
-// Office Admin views their OWN office
+// Super Admin approves a pending (or previously rejected) registration
+const approveOffice = async (req, res) => {
+  try {
+    const office = await Office.findById(req.params.id);
+    if (!office) return res.status(404).json({ message: 'Office not found' });
+
+    if (office.status !== 'pending' && office.status !== 'rejected') {
+      return res.status(400).json({ message: 'Only pending or rejected registrations can be approved' });
+    }
+
+    office.status = 'active';
+    office.rejectionReason = null;
+    office.reviewedAt = new Date();
+    await office.save();
+
+    await logAction({
+      userId: req.user.id,
+      officeId: office._id,
+      action: 'OFFICE_APPROVED',
+      resourceType: 'Office',
+      resourceId: office._id,
+      metadata: { officeName: office.name },
+    });
+
+    res.json(office);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Super Admin rejects a pending registration — a reason is required
+const rejectOffice = async (req, res) => {
+  try {
+    const { reason } = req.body;
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ message: 'A rejection reason is required' });
+    }
+
+    const office = await Office.findById(req.params.id);
+    if (!office) return res.status(404).json({ message: 'Office not found' });
+
+    if (office.status !== 'pending') {
+      return res.status(400).json({ message: 'Only pending registrations can be rejected' });
+    }
+
+    office.status = 'rejected';
+    office.rejectionReason = reason.trim();
+    office.reviewedAt = new Date();
+    await office.save();
+
+    await logAction({
+      userId: req.user.id,
+      officeId: office._id,
+      action: 'OFFICE_REJECTED',
+      resourceType: 'Office',
+      resourceId: office._id,
+      metadata: { officeName: office.name, reason: reason.trim() },
+    });
+
+    res.json(office);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 const getMyOffice = async (req, res) => {
   try {
     const office = await Office.findById(req.user.officeId);
@@ -108,7 +168,6 @@ const getMyOffice = async (req, res) => {
   }
 };
 
-// Office Admin updates their OWN office's name
 const updateMyOffice = async (req, res) => {
   try {
     const { name } = req.body;
@@ -121,10 +180,6 @@ const updateMyOffice = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
-
-// Office Admin uploads a logo for their OWN office
-const fs = require('fs');
-const path = require('path');
 
 const uploadOfficeLogo = async (req, res) => {
   try {
@@ -148,6 +203,25 @@ const uploadOfficeLogo = async (req, res) => {
   }
 };
 
+const deleteOffice = async (req, res) => {
+  try {
+    const office = await Office.findById(req.params.id);
+    if (!office) return res.status(404).json({ message: 'Office not found' });
+
+    // An office that never went live has no real data — remove its admin account too,
+    // otherwise that email could never register again.
+    if (office.status === 'pending' || office.status === 'rejected') {
+      await User.deleteMany({ officeId: office._id, role: 'office_admin' });
+    }
+
+    await Office.deleteOne({ _id: office._id });
+
+    res.json({ message: 'Office permanently deleted' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = {
   createOffice,
   getOffices,
@@ -155,7 +229,10 @@ module.exports = {
   updateOffice,
   suspendOffice,
   activateOffice,
+  approveOffice,
+  rejectOffice,
   getMyOffice,
   updateMyOffice,
   uploadOfficeLogo,
+  deleteOffice,
 };

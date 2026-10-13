@@ -1,9 +1,11 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const User = require('../models/User');
+const Office = require('../models/Office');
 const generateToken = require('../utils/generateToken');
 const { logAction } = require('../services/auditService');
 const { sendPasswordResetEmail } = require('../utils/sendEmail');
+const { getDefaultQuotaForPlan } = require('../utils/planQuotas');
 
 const registerUser = async (req, res) => {
   try {
@@ -36,6 +38,62 @@ const registerUser = async (req, res) => {
   }
 };
 
+// Public: an office applies to join the platform. Starts as "pending".
+const registerOffice = async (req, res) => {
+  let office = null;
+  let userCreated = false;
+
+  try {
+    const { officeName, officeType, adminName } = req.body;
+    const email = req.body.email.trim().toLowerCase();
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'An account with this email already exists' });
+    }
+
+    // status, role and plan are decided HERE, never taken from the request body
+    office = await Office.create({
+      name: officeName.trim(),
+      officeType,
+      status: 'pending',
+      subscriptionPlan: 'basic',
+      storageQuotaMB: getDefaultQuotaForPlan('basic'),
+    });
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(req.body.password, salt);
+
+    await User.create({
+      name: adminName.trim(),
+      email,
+      password: hashedPassword,
+      role: 'office_admin',
+      officeId: office._id,
+    });
+    userCreated = true;
+
+    await logAction({
+      userId: null,
+      officeId: office._id,
+      action: 'OFFICE_REGISTERED',
+      resourceType: 'Office',
+      resourceId: office._id,
+      metadata: { email, officeName: office.name },
+    });
+
+    res.status(201).json({
+      message: 'Registration received. You will be able to sign in once your office is approved.',
+    });
+  } catch (error) {
+    // don't leave a half-created office behind if the admin account failed
+    if (office && !userCreated) {
+      await Office.deleteOne({ _id: office._id }).catch(() => {});
+    }
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -63,6 +121,19 @@ const loginUser = async (req, res) => {
         metadata: { email, reason: 'Wrong password' },
       });
       return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Only reveal the office status AFTER the password is correct
+    if (user.officeId) {
+      const office = await Office.findById(user.officeId);
+      if (office && office.status !== 'active') {
+        const messages = {
+          pending: 'Your office registration is waiting for approval. You will be able to sign in once it is approved.',
+          rejected: `Your office registration was not approved.${office.rejectionReason ? ` Reason: ${office.rejectionReason}` : ''}`,
+          suspended: 'Your office has been suspended. Please contact support.',
+        };
+        return res.status(403).json({ message: messages[office.status] || 'Your office is not active.' });
+      }
     }
 
     const token = generateToken(user);
@@ -137,4 +208,4 @@ const resetPassword = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, loginUser, forgotPassword, resetPassword };
+module.exports = { registerUser, registerOffice, loginUser, forgotPassword, resetPassword };

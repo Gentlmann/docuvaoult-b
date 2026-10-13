@@ -41,8 +41,7 @@ app.use('/api/access-grants', require('./routes/accessGrantRoutes'));
 
 app.use(
   '/logos',
-  express.static(path.join(__dirname, 'uploads', 'logos'))
-);
+  express.static(path.join(__dirname, 'uploads', 'logos')));
 
 app.use('/api/profile', require('./routes/profileRoutes'));
 app.use('/api/audit-logs', require('./routes/auditRoutes'));
