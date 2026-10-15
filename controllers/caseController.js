@@ -4,10 +4,20 @@ const { logAction } = require('../services/auditService');
 
 const createCase = async (req, res) => {
   try {
-    const { caseNumber, title, clientId, caseType, description, openingDate } = req.body;
+    const { title, clientId, caseType, description, openingDate } = req.body;
+    const caseNumber = (req.body.caseNumber || '').trim();
 
     if (!caseNumber || !title || !clientId) {
       return res.status(400).json({ message: 'caseNumber, title, and clientId are required' });
+    }
+
+    // Duplicate check — scoped to THIS office, case-insensitive
+    const duplicate = await Case.findOne({ officeId: req.user.officeId, caseNumber })
+      .collation({ locale: 'en', strength: 2 });
+    if (duplicate) {
+      return res.status(409).json({
+        message: `Case number "${caseNumber}" already exists in your office. Please use a different number.`,
+      });
     }
 
     const client = await Client.findOne({ _id: clientId, officeId: req.user.officeId });
@@ -35,6 +45,12 @@ const createCase = async (req, res) => {
 
     res.status(201).json(newCase);
   } catch (error) {
+    // Two requests with the same number at the same instant: the database index catches the loser
+    if (error.code === 11000) {
+      return res.status(409).json({
+        message: 'That case number already exists in your office. Please use a different number.',
+      });
+    }
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -71,6 +87,7 @@ const getCaseById = async (req, res) => {
   }
 };
 
+// Note: caseNumber is not editable after creation, so no duplicate check is needed here
 const updateCase = async (req, res) => {
   try {
     const { title, caseType, status, description, closingDate } = req.body;

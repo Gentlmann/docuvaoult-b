@@ -17,9 +17,7 @@ connectDB();
 
 app.use(
   helmet({
-    crossOriginResourcePolicy: { policy: 'cross-origin' },
-  })
-);
+    crossOriginResourcePolicy: { policy: 'cross-origin' },}));
 
 const corsOptions = {
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
