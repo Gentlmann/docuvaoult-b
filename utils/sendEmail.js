@@ -1,10 +1,16 @@
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_APP_PASSWORD,
+  },
+});
 
 const sendPasswordResetEmail = async (toEmail, resetLink) => {
-  await resend.emails.send({
-    from: 'DocuVault <onboarding@resend.dev>',
+  await transporter.sendMail({
+    from: `"DocuVault" <${process.env.EMAIL_USER}>`,
     to: toEmail,
     subject: 'Reset your DocuVault password',
     html: `

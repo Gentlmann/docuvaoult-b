@@ -173,8 +173,19 @@ const forgotPassword = async (req, res) => {
     await user.save();
 
     const resetLink = `${process.env.CLIENT_URL}/reset-password/${rawToken}`;
-    await sendPasswordResetEmail(user.email, resetLink);
 
+    // Development convenience: lets you reset without email. Remove before deploying.
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('DEV reset link:', resetLink);
+    }
+
+    try {
+      await sendPasswordResetEmail(user.email, resetLink);
+    } catch (emailError) {
+      console.error('Password reset email failed:', emailError.message);
+    }
+
+    // Same response either way, so the page never reveals which emails exist
     res.json({ message: 'If that email exists, a reset link has been sent.' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
