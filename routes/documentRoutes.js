@@ -15,6 +15,8 @@ const {
   uploadNewVersion,
   getVersionHistory,
   downloadVersion,
+  approveDocument,
+  rejectDocument,
 } = require('../controllers/documentController');
 
 router.post(
@@ -41,6 +43,8 @@ router.post(
   validateFileContent,
   uploadNewVersion
 );
+router.put('/:id/approve', protect, authorize('office_admin'), approveDocument);
+router.put('/:id/reject', protect, authorize('office_admin'), rejectDocument);
 router.get('/:id/download', protect, authorize('office_admin', 'staff'), checkPermission('documents', 'read'), downloadDocument);
 router.delete('/:id', protect, authorize('office_admin', 'staff'), checkPermission('documents', 'write'), archiveDocument);
 

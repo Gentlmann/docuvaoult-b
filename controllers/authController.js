@@ -4,7 +4,11 @@ const User = require('../models/User');
 const Office = require('../models/Office');
 const generateToken = require('../utils/generateToken');
 const { logAction } = require('../services/auditService');
-const { sendPasswordResetEmail } = require('../utils/sendEmail');
+const {
+  sendPasswordResetEmail,
+  sendRegistrationReceivedEmail,
+  sendNewRegistrationNotice,
+} = require('../utils/sendEmail');
 const { getDefaultQuotaForPlan } = require('../utils/planQuotas');
 
 const registerUser = async (req, res) => {
@@ -81,6 +85,10 @@ const registerOffice = async (req, res) => {
       resourceId: office._id,
       metadata: { email, officeName: office.name },
     });
+
+    // Not awaited: the applicant gets their response immediately, and these never throw
+    sendRegistrationReceivedEmail(email, adminName.trim(), office.name);
+    sendNewRegistrationNotice(office.name, adminName.trim(), email);
 
     res.status(201).json({
       message: 'Registration received. You will be able to sign in once your office is approved.',

@@ -5,6 +5,7 @@ const Client = require('../models/Client');
 const User = require('../models/User');
 const { getDefaultQuotaForPlan } = require('../utils/planQuotas');
 const { logAction } = require('../services/auditService');
+const { sendOfficeApprovedEmail, sendOfficeRejectedEmail } = require('../utils/sendEmail');
 
 const createOffice = async (req, res) => {
   try {
@@ -117,6 +118,12 @@ const approveOffice = async (req, res) => {
       metadata: { officeName: office.name },
     });
 
+    // Tell the office admin they can sign in (not awaited; never throws)
+    const admin = await User.findOne({ officeId: office._id, role: 'office_admin' });
+    if (admin) {
+      sendOfficeApprovedEmail(admin.email, admin.name, office.name);
+    }
+
     res.json(office);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -151,6 +158,11 @@ const rejectOffice = async (req, res) => {
       resourceId: office._id,
       metadata: { officeName: office.name, reason: reason.trim() },
     });
+
+    const admin = await User.findOne({ officeId: office._id, role: 'office_admin' });
+    if (admin) {
+      sendOfficeRejectedEmail(admin.email, admin.name, office.name, reason.trim());
+    }
 
     res.json(office);
   } catch (error) {

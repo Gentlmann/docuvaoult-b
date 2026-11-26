@@ -263,6 +263,66 @@ const handleView = async (id) => {
     showToast('Failed to open document', 'error');
   }
 };
+const approveDocument = async (req, res) => {
+  try {
+    const document = await Document.findOne({ _id: req.params.id, officeId: req.user.officeId });
+    if (!document) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    document.approvalStatus = 'approved';
+    document.reviewedBy = req.user.id;
+    document.reviewedAt = new Date();
+    document.rejectionReason = null;
+    await document.save();
+
+    await logAction({
+      userId: req.user.id,
+      officeId: req.user.officeId,
+      action: 'APPROVE_DOCUMENT',
+      resourceType: 'Document',
+      resourceId: document._id,
+      metadata: { fileName: document.fileName },
+    });
+
+    res.json(document);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+const rejectDocument = async (req, res) => {
+  try {
+    const { reason } = req.body;
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ message: 'A rejection reason is required' });
+    }
+
+    const document = await Document.findOne({ _id: req.params.id, officeId: req.user.officeId });
+    if (!document) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    document.approvalStatus = 'rejected';
+    document.reviewedBy = req.user.id;
+    document.reviewedAt = new Date();
+    document.rejectionReason = reason.trim();
+    await document.save();
+
+    await logAction({
+      userId: req.user.id,
+      officeId: req.user.officeId,
+      action: 'REJECT_DOCUMENT',
+      resourceType: 'Document',
+      resourceId: document._id,
+      metadata: { fileName: document.fileName, reason: reason.trim() },
+    });
+
+    res.json(document);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
 
 module.exports = {
   uploadDocument,
@@ -274,4 +334,7 @@ module.exports = {
   getVersionHistory,
   downloadVersion,
   handleView,
+  approveDocument,
+  rejectDocument,
+  
 };
